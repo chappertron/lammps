@@ -44,7 +44,6 @@
 #include <cstring>
 #include <exception>
 #include <utility>
-
 using namespace LAMMPS_NS;
 using namespace MathConst;
 
@@ -800,19 +799,46 @@ void FixElectrodeConp::update_charges()
       double *_noalias caprow = capacitance[iele];
       for (int j = 0; j < ngroup; j++) { q_tmp -= caprow[j] * potential_iele[j]; }
       q_local[i_iele] = q_tmp;
-      sb_charges[iele_to_group[iele]] += q_tmp;
+      sb_charges[iele_to_group[iele]] += q_tmp; // total charge on group if only Sb term is used
     }
     MPI_Allreduce(MPI_IN_PLACE, &sb_charges.front(), num_of_groups, MPI_DOUBLE, MPI_SUM, world);
     update_psi();    // use for equal-style and conq
     for (int g = 0; g < num_of_groups; g++)
+      // For non-ffield adds Capacitance * evscale
+      // for ffield adds Capacitance * evscale * (z/zprd + zprd_offset)*+-1 (depending on top or bot)
       for (int j = 0; j < nlocalele; j++) q_local[j] += sd_vectors[g][list_iele[j]] * group_psi[g];
     MPI_Barrier(world);
     mult_time += MPI_Wtime() - mult_start;
   } else if (algo == Algo::MATRIX_CG || algo == Algo::CG) {    // conjugate gradient algorithm
     update_psi();                                              // update group_psi if equal-style
+
+    // TODO if Aglo::MATRIX_CG -> Only compute once, because elctrode atoms do not move
+    // tagint *tags = atom->tag;
+    
+    // Needed for ffield
+    double **x = atom->x;
+    double zprd = domain->prd[2];
+    
+    // 1 - top_group is the bottom group id
+    double const ffield_strength = (compute_vector(top_group)-compute_vector(1-top_group))/zprd;
+
     auto b = gather_elevec_local(elyt_vector);
     for (int i = 0; i < nlocalele; i++) {
-      b[i] -= evscale * group_psi[iele_to_group_local[i]];
+      // for non-finite field
+      if (!ffield) {
+        b[i] -= evscale * group_psi[iele_to_group_local[i]];
+      }
+      else {
+        // Adding offset present in the compute_sd_vectors_ffield func 
+        // Centres the bottom group, and wraps around the top group
+        double const zprd_offset = (iele_to_group_local[i] == top_group) ? -0.5 : +0.5;
+
+        
+        b[i] += evscale * ffield_strength * (x[atom->map(taglist_local[i])][2] + zprd_offset* zprd);
+
+      }
+
+
       q_local[i] = q[atom->map(taglist_local[i])];    // pre-condition with current charges
     }
     q_local = constraint_correction(q_local);
