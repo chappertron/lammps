@@ -1346,7 +1346,7 @@ void FixElectrodeConp::request_etypes_neighlists()
   MPI_Allreduce(MPI_IN_PLACE, &elyt.front(), ntypes, MPI_INT, MPI_SUM, world);
   etypes.clear();
   for (int i = 0; i < ntypes; i++) {
-    if (!elec[i] == !elyt[i]) error->all(FLERR, "Types overlap, cannot use etypes keyword");
+    if (elec[i] > 0 & elyt[i] > 0) error->all(FLERR, "Types overlap, cannot use etypes keyword");
     if (elec[i]) etypes.push_back(i + 1);
   }
   // construct skip arrays
