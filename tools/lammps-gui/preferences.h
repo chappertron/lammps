@@ -34,6 +34,7 @@ private slots:
 
 public:
     bool need_relaunch;
+
 private:
     QTabWidget *tabWidget;
     QDialogButtonBox *buttonBox;
@@ -77,6 +78,16 @@ class SnapshotTab : public QWidget {
 
 public:
     explicit SnapshotTab(QSettings *settings, QWidget *parent = nullptr);
+
+private:
+    QSettings *settings;
+};
+
+class EditorTab : public QWidget {
+    Q_OBJECT
+
+public:
+    explicit EditorTab(QSettings *settings, QWidget *parent = nullptr);
 
 private:
     QSettings *settings;
